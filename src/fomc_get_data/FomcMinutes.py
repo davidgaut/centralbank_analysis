@@ -4,7 +4,7 @@ import sys
 import os
 import pickle
 import re
-
+from itertools import chain
 import requests
 from bs4 import BeautifulSoup
 
@@ -13,6 +13,14 @@ import pandas as pd
 
 # Import parent class
 from .FomcBase import FomcBase
+
+def try_parsing_date(text):
+    for fmt in ('%B-%d-%Y','%b-%d-%Y'):
+        try:
+            return datetime.strptime(text, fmt)
+        except ValueError:
+            pass
+    raise ValueError('no valid date format found')
 
 class FomcMinutes(FomcBase):
     '''
@@ -33,6 +41,8 @@ class FomcMinutes(FomcBase):
         self.titles = []
         self.speakers = []
         self.dates = []
+        self.date_released = []
+        self.date_meeting = []
 
         r = requests.get(self.calendar_url)
         soup = BeautifulSoup(r.text, 'html.parser')
@@ -40,22 +50,46 @@ class FomcMinutes(FomcBase):
         # Getting links from current page. Meetin scripts are not available.
         if self.verbose: print("Getting links for minutes...")
         contents = soup.find_all('a', href=re.compile('^/monetarypolicy/fomcminutes\d{8}.htm'))
-        
         self.links = [content.attrs['href'] for content in contents]
         self.speakers = [self._speaker_from_date(self._date_from_link(x)) for x in self.links]
         self.titles = ['FOMC Meeting Minutes'] * len(self.links)
         self.dates = [datetime.strptime(self._date_from_link(x), '%Y-%m-%d') for x in self.links]
+        # Get release dates for minutes
+        # Date release
+        # date_released = list(map('-'.join,re.findall('\(Released (\w*) (\d{1,2}), (\d{4})\)',r.text)))
+        
+        text = soup.find_all('div', {'class': re.compile(r'.*fomc-meeting__minutes')})
+        date_released = list(chain(*[re.findall('\(Released (\w*) (\d{1,2}), (\d{4})\)',t.text) for t in text]))
+        date_released = list(map('-'.join,date_released))
+        date_released = [try_parsing_date(x) for x in date_released]
+        self.date_released = self.date_released + date_released
+        # # Date meeting
+        # date_meeting = list(map('-'.join,re.findall('(\w*) (?:\d{1,2}-)(\d{1,2}) Meeting - (\d{4})',r.text)))
+        # date_meeting = [try_parsing_date(x) for x in date_meeting]
+        # self.date_meeting = self.date_meeting + date_meeting
+        for year in range(from_year, 2017):
+            fomc_yearly_url = self.base_url + '/monetarypolicy/fomchistorical' + str(year) + '.htm'
+            r = requests.get(fomc_yearly_url)
+            # Date release
+            date_released = list(map('-'.join,re.findall('\(Released (\w*) (\d{1,2}), (\d{4})\)',r.text)))
+            date_released = [try_parsing_date(x) for x in date_released]
+            self.date_released = self.date_released + date_released
+            # # Date meeting
+            # date_meeting = list(map('-'.join,re.findall('(\w*) (?:\d{1,2}-)(\d{1,2}) Meeting - (\d{4})',r.text)))
+            # date_meeting = [try_parsing_date(x) for x in date_meeting]
+            # self.date_meeting = self.date_meeting + date_meeting
+        # self.date_released = sorted(self.date_released)
         if self.verbose: print("{} links found in the current page.".format(len(self.links)))
 
         # Archived before 2015
-        if from_year <= 2014:
+        if from_year <= 2015:
             print("Getting links from archive pages...")
-            for year in range(from_year, 2015):
+            for year in range(from_year, 2017):
                 yearly_contents = []
                 fomc_yearly_url = self.base_url + '/monetarypolicy/fomchistorical' + str(year) + '.htm'
                 r_year = requests.get(fomc_yearly_url)
                 soup_yearly = BeautifulSoup(r_year.text, 'html.parser')
-                yearly_contents = soup_yearly.find_all('a', href=re.compile('(^/monetarypolicy/fomcminutes|^/fomc/minutes|^/fomc/MINUTES)'))
+                yearly_contents = soup_yearly.find_all('a', href=re.compile('(^/monetarypolicy/fomc\d+|^/monetarypolicy/fomcminutes|^/fomc/minutes|^/fomc/MINUTES)'))
                 for yearly_content in yearly_contents:
                     self.links.append(yearly_content.attrs['href'])
                     self.speakers.append(self._speaker_from_date(self._date_from_link(yearly_content.attrs['href'])))
@@ -117,6 +151,12 @@ class FomcMinutes(FomcBase):
             # else:
             #     fn.decompose()
             fn.decompose()
-        # Get all p tag
+        # # Get all p tag
         paragraphs = article.findAll('p')
         self.articles[index] = "\n\n[SECTION]\n\n".join([paragraph.get_text().strip() for paragraph in paragraphs])
+        # Replace findAll with find to avoid duplicates
+        # if len(article.find('p')) == 1:
+        #     paragraphs = article.findAll('p')
+        # else:
+        #     paragraphs = article.find('p')
+        # self.articles[index] = "\n\n[SECTION]\n\n".join([paragraph.get_text().strip() for paragraph in paragraphs])

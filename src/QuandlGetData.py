@@ -31,7 +31,7 @@ if __name__ == '__main__':
         all_data = False
         quandl_code = args[2]
 
-    quandl.ApiConfig.api_key = args[0]
+    quandl.ApiConfig.api_key = 'Nr-pUGmmXJ_ALHGvU65J'#args[0]
     from_date = args[1]
     try:
         datetime.datetime.strptime(from_date, '%Y-%m-%d')

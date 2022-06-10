@@ -114,6 +114,8 @@ class FomcBase(metaclass=ABCMeta):
         #for row in range(len(self.articles)):
         #    self.articles[row] = self.articles[row].strip()
 
+    
+
     def get_contents(self, from_year=1990):
         '''
         Returns a Pandas DataFrame with the date as the index for a date range of from_year to the most current.
@@ -127,7 +129,23 @@ class FomcBase(metaclass=ABCMeta):
             'speaker': self.speakers, 
             'title': self.titles
         }
+        # dict.update({'date_released':self.date_released})
+        # np.unique(self.date_released)
+
+        # pd.DataFrame([(x.year,1) for x in np.unique(self.dates)]).groupby(0).count()
+
+        # pd.DataFrame([(x.year,1) for x in np.unique(self.date_released)]).groupby(0).count()
+
+        # pd.DataFrame({'dates':sorted(np.unique(self.dates)),'dates_released':sorted(np.unique(self.date_released))[:-1]})
+
         self.df = pd.DataFrame(dict).sort_values(by=['date'])
+        
+        if hasattr(self, 'date_released'):
+            print('Minutes detected!\nAdding "release dates"')
+            self.df = self.df.drop_duplicates()
+            self.date_released = sorted(np.unique(self.date_released))
+            self.df = self.df.assign(date_released=self.date_released)
+            
         self.df.reset_index(drop=True, inplace=True)
         return self.df
 

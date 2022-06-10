@@ -52,11 +52,13 @@ class FomcStatement(FomcBase):
         if self.verbose: print("{} links found in the current page.".format(len(self.links)))
 
         # Archived before 2015
-        if from_year <= 2014:
+        hist_site = 2017
+        if from_year <= hist_site:
             print("Getting links from archive pages...")
-            for year in range(from_year, 2015):
+            for year in range(from_year, hist_site):
                 yearly_contents = []
                 fomc_yearly_url = self.base_url + '/monetarypolicy/fomchistorical' + str(year) + '.htm'
+                print(fomc_yearly_url)
                 r_year = requests.get(fomc_yearly_url)
                 soup_yearly = BeautifulSoup(r_year.text, 'html.parser')
                 yearly_contents = soup_yearly.findAll('a', text = 'Statement')
@@ -94,5 +96,12 @@ class FomcStatement(FomcBase):
         res = requests.get(self.base_url + link)
         html = res.text
         article = BeautifulSoup(html, 'html.parser')
-        paragraphs = article.findAll('p')
+        # html = html.replace('<P', '<p').replace('</P>', '</p>')
+        # html = html.replace('<p', '</p><p').replace('</p><p', '<p', 1)
+
+        # Replace findAll with find to avoid duplicates
+        if len(article.find('p')) == 1:
+            paragraphs = article.findAll('p')
+        else:
+            paragraphs = article.find('p')
         self.articles[index] = "\n\n[SECTION]\n\n".join([paragraph.get_text().strip() for paragraph in paragraphs])
